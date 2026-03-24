@@ -1,0 +1,9 @@
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.csproj.AssemblyReference.cache
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\rpswa.dswa.cache.json
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.AssemblyInfo.cs
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\User\Desktop\Work\software\Project2\OrderManagementApi\obj\Debug\net10.0\OrderManagementApi.sourcelink.json
