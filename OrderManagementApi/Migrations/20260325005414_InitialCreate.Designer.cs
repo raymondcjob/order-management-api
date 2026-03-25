@@ -12,7 +12,7 @@ using OrderManagementApi.Data;
 namespace OrderManagementApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260324050748_InitialCreate")]
+    [Migration("20260325005414_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -36,9 +36,8 @@ namespace OrderManagementApi.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

@@ -22,7 +22,7 @@ public class OrdersController : ControllerBase
     {
         var order = new Order
         {
-            Status = "Pending",
+            Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -49,7 +49,7 @@ public class OrdersController : ControllerBase
         {
             Id = order.Id,
             CreatedAt = order.CreatedAt,
-            Status = order.Status,
+            Status = order.Status.ToString(),
             TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
             Items = order.Items.Select(i => new OrderItemResponseDto
             {
@@ -81,7 +81,7 @@ public class OrdersController : ControllerBase
             return NotFound(new { message = $"Order with id {id} was not found." });
         }
 
-        if (order.Status != "Pending")
+        if (order.Status != OrderStatus.Pending)
         {
             return BadRequest(new { message = "Items can only be added to a pending order." });
         }
@@ -130,7 +130,7 @@ public class OrdersController : ControllerBase
             return NotFound(new { message = $"Order with id {id} was not found." });
         }
 
-        if (order.Status != "Pending")
+        if (order.Status != OrderStatus.Pending)
         {
             return BadRequest(new { message = "Only pending orders can be checked out." });
         }
@@ -161,14 +161,14 @@ public class OrdersController : ControllerBase
             item.Product!.StockQuantity -= item.Quantity;
         }
 
-        order.Status = "Paid";
+        order.Status = OrderStatus.Paid;
 
         await _context.SaveChangesAsync();
 
         var response = new CheckoutResponseDto
         {
             OrderId = order.Id,
-            Status = order.Status,
+            Status = order.Status.ToString(),
             TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
             Message = "Order checked out successfully."
         };
@@ -191,35 +191,43 @@ public class OrdersController : ControllerBase
             return BadRequest(new { message = "NewStatus is required." });
         }
 
-        var normalizedStatus = dto.NewStatus.Trim();
+        var parseSucceeded = Enum.TryParse<OrderStatus>(dto.NewStatus.Trim(), true, out var newStatus);
 
-        if (!IsValidStatusTransition(order.Status, normalizedStatus))
+        if (!parseSucceeded)
         {
             return BadRequest(new
             {
-                message = $"Invalid status transition from '{order.Status}' to '{normalizedStatus}'."
+                message = $"'{dto.NewStatus}' is not a valid order status."
             });
         }
 
-        order.Status = normalizedStatus;
+        if (!IsValidStatusTransition(order.Status, newStatus))
+        {
+            return BadRequest(new
+            {
+                message = $"Invalid status transition from '{order.Status}' to '{newStatus}'."
+            });
+        }
+
+        order.Status = newStatus;
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
             message = $"Order status updated to {order.Status}.",
             orderId = order.Id,
-            status = order.Status
+            status = order.Status.ToString()
         });
     }
-    private static bool IsValidStatusTransition(string currentStatus,string newStatus)
+    private static bool IsValidStatusTransition(OrderStatus currentStatus,OrderStatus newStatus)
     {
         return (currentStatus, newStatus) switch
         {
-            ("Pending", "Paid") => true,
-            ("Paid", "Shipped") => true,
-            ("Shipped", "Completed") => true,
-            ("Pending", "Cancelled") => true,
-            ("Paid", "Cancelled") => true,
+            (OrderStatus.Pending, OrderStatus.Paid) => true,
+            (OrderStatus.Paid, OrderStatus.Shipped) => true,
+            (OrderStatus.Shipped, OrderStatus.Completed) => true,
+            (OrderStatus.Pending, OrderStatus.Cancelled) => true,
+            (OrderStatus.Paid, OrderStatus.Cancelled) => true,
             _ => false
         };
     }
