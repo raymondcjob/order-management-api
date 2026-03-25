@@ -175,4 +175,52 @@ public class OrdersController : ControllerBase
 
         return Ok(response);
     }
+
+    [HttpPut("{id}/status")]
+    public async Task<ActionResult> UpdateOrderStatus(int id, UpdateOrderStatusDto dto)
+    {
+        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order is null)
+        {
+            return NotFound(new { message = $"Order with id {id} was not found." });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.NewStatus))
+        {
+            return BadRequest(new { message = "NewStatus is required." });
+        }
+
+        var normalizedStatus = dto.NewStatus.Trim();
+
+        if (!IsValidStatusTransition(order.Status, normalizedStatus))
+        {
+            return BadRequest(new
+            {
+                message = $"Invalid status transition from '{order.Status}' to '{normalizedStatus}'."
+            });
+        }
+
+        order.Status = normalizedStatus;
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = $"Order status updated to {order.Status}.",
+            orderId = order.Id,
+            status = order.Status
+        });
+    }
+    private static bool IsValidStatusTransition(string currentStatus,string newStatus)
+    {
+        return (currentStatus, newStatus) switch
+        {
+            ("Pending", "Paid") => true,
+            ("Paid", "Shipped") => true,
+            ("Shipped", "Completed") => true,
+            ("Pending", "Cancelled") => true,
+            ("Paid", "Cancelled") => true,
+            _ => false
+        };
+    }
 }
