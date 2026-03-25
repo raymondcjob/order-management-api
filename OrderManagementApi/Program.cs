@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrderManagementApi.Data;
+using OrderManagementApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 var app = builder.Build();
 

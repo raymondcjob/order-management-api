@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OrderManagementApi.Data;
 using OrderManagementApi.Dtos;
 using OrderManagementApi.Models;
+using OrderManagementApi.Services;
 
 namespace OrderManagementApi.Controllers;
 
@@ -10,225 +10,94 @@ namespace OrderManagementApi.Controllers;
 [Route("api/[controller]")]
 public class OrdersController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IOrderService _orderService;
 
-    public OrdersController(AppDbContext context)
+    public OrdersController(IOrderService orderService)
     {
-        _context = context;
+        _orderService = orderService;
     }
 
     [HttpPost]
     public async Task<ActionResult<Order>> CreateOrder(CreateOrderDto dto)
     {
-        var order = new Order
+        var orderId = await _orderService.CreateOrderAsync();
+
+        return CreatedAtAction(nameof(GetOrderById), new { id = orderId }, new
         {
-            Status = OrderStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetOrderById), new { id = order.Id }, order);
+            id = orderId,
+            message = "Order created successfully."
+        });
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<OrderResponseDto>> GetOrderById(int id)
     {
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .ThenInclude(i => i.Product)
-            .FirstOrDefaultAsync(o => o.Id == id);
+        var order = await _orderService.GetOrderByIdAsync(id);
 
         if (order is null)
         {
             return NotFound(new { message = $"Order with id {id} was not found." });
         }
 
-        var response = new OrderResponseDto
-        {
-            Id = order.Id,
-            CreatedAt = order.CreatedAt,
-            Status = order.Status.ToString(),
-            TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
-            Items = order.Items.Select(i => new OrderItemResponseDto
-            {
-                Id = i.Id,
-                ProductId = i.ProductId,
-                ProductName = i.Product?.Name ?? string.Empty,
-                Quantity = i.Quantity,
-                UnitPrice = i.UnitPrice
-            }).ToList()
-        };
-
-        return Ok(response);
+        return Ok(order);
     }
 
     [HttpPost("{id}/items")]
     public async Task<ActionResult> AddItemToOrder(int id, AddOrderItemDto dto)
     {
-        if (dto.Quantity <= 0)
+        var result = await _orderService.AddItemToOrderAsync(id, dto);
+
+        if (!result.Success)
         {
-            return BadRequest(new { message = "Quantity must be greater than 0." });
-        }
-
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .FirstOrDefaultAsync(o => o.Id == id);
-
-        if (order is null)
-        {
-            return NotFound(new { message = $"Order with id {id} was not found." });
-        }
-
-        if (order.Status != OrderStatus.Pending)
-        {
-            return BadRequest(new { message = "Items can only be added to a pending order." });
-        }
-
-        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId);
-
-        if (product is null)
-        {
-            return NotFound(new { message = $"Product with id {dto.ProductId} was not found." });
-        }
-
-        var existingItem = order.Items.FirstOrDefault(i => i.ProductId == dto.ProductId);
-
-        if (existingItem is not null)
-        {
-            existingItem.Quantity += dto.Quantity;
-        }
-        else
-        {
-            var orderItem = new OrderItem
+            if (result.Message.Contains("not found"))
             {
-                OrderId = order.Id,
-                ProductId = product.Id,
-                Quantity = dto.Quantity,
-                UnitPrice = product.Price
-            };
+                return NotFound(new { message = result.Message });
+            }
 
-            _context.OrderItems.Add(orderItem);
+            return BadRequest(new { message = result.Message });
         }
 
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Item added to order successfully." });
+        return Ok(new { message = result.Message });
     }
 
     [HttpPost("{id}/checkout")]
     public async Task<ActionResult<CheckoutResponseDto>> CheckoutOrder(int id)
     {
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .ThenInclude(i => i.Product)
-            .FirstOrDefaultAsync(o => o.Id == id);
+        var result = await _orderService.CheckoutOrderAsync(id);
 
-        if (order is null)
+        if (!result.Success)
         {
-            return NotFound(new { message = $"Order with id {id} was not found." });
-        }
-
-        if (order.Status != OrderStatus.Pending)
-        {
-            return BadRequest(new { message = "Only pending orders can be checked out." });
-        }
-
-        if (!order.Items.Any())
-        {
-            return BadRequest(new { message = "Cannot checkout an order with no items." });
-        }
-
-        foreach (var item in order.Items)
-        {
-            if (item.Product is null)
+            if (result.Message.Contains("not found"))
             {
-                return BadRequest(new { message = $"Product data is missing for order item {item.Id}." });
+                return NotFound(new { message = result.Message });
             }
 
-            if (item.Quantity > item.Product.StockQuantity)
-            {
-                return BadRequest(new
-                {
-                    message = $"Not enough stock for product '{item.Product.Name}'. Available stock: {item.Product.StockQuantity}."
-                });
-            }
+            return BadRequest(new { message = result.Message });
         }
 
-        foreach (var item in order.Items)
-        {
-            item.Product!.StockQuantity -= item.Quantity;
-        }
-
-        order.Status = OrderStatus.Paid;
-
-        await _context.SaveChangesAsync();
-
-        var response = new CheckoutResponseDto
-        {
-            OrderId = order.Id,
-            Status = order.Status.ToString(),
-            TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
-            Message = "Order checked out successfully."
-        };
-
-        return Ok(response);
+        return Ok(result.Response);
     }
 
     [HttpPut("{id}/status")]
     public async Task<ActionResult> UpdateOrderStatus(int id, UpdateOrderStatusDto dto)
     {
-        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
+        var result = await _orderService.UpdateOrderStatusAsync(id, dto);
 
-        if (order is null)
+        if (!result.Success)
         {
-            return NotFound(new { message = $"Order with id {id} was not found." });
-        }
-
-        if (string.IsNullOrWhiteSpace(dto.NewStatus))
-        {
-            return BadRequest(new { message = "NewStatus is required." });
-        }
-
-        var parseSucceeded = Enum.TryParse<OrderStatus>(dto.NewStatus.Trim(), true, out var newStatus);
-
-        if (!parseSucceeded)
-        {
-            return BadRequest(new
+            if (result.Message.Contains("not found"))
             {
-                message = $"'{dto.NewStatus}' is not a valid order status."
-            });
-        }
+                return NotFound(new { message = result.Message });
+            }
 
-        if (!IsValidStatusTransition(order.Status, newStatus))
-        {
-            return BadRequest(new
-            {
-                message = $"Invalid status transition from '{order.Status}' to '{newStatus}'."
-            });
+            return BadRequest(new { message = result.Message });
         }
-
-        order.Status = newStatus;
-        await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            message = $"Order status updated to {order.Status}.",
-            orderId = order.Id,
-            status = order.Status.ToString()
+            message = result.Message,
+            orderId = id,
+            status = result.UpdatedStatus
         });
-    }
-    private static bool IsValidStatusTransition(OrderStatus currentStatus,OrderStatus newStatus)
-    {
-        return (currentStatus, newStatus) switch
-        {
-            (OrderStatus.Pending, OrderStatus.Paid) => true,
-            (OrderStatus.Paid, OrderStatus.Shipped) => true,
-            (OrderStatus.Shipped, OrderStatus.Completed) => true,
-            (OrderStatus.Pending, OrderStatus.Cancelled) => true,
-            (OrderStatus.Paid, OrderStatus.Cancelled) => true,
-            _ => false
-        };
     }
 }
