@@ -54,7 +54,6 @@ public class ProductsController : ControllerBase
 
         var product = new Product
         {
-            Id = dto.Id,
             Name = dto.Name.Trim(),
             Price = dto.Price,
             StockQuantity = dto.StockQuantity
