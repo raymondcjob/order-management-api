@@ -50,6 +50,7 @@ public class OrdersController : ControllerBase
             Id = order.Id,
             CreatedAt = order.CreatedAt,
             Status = order.Status,
+            TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
             Items = order.Items.Select(i => new OrderItemResponseDto
             {
                 Id = i.Id,
@@ -114,5 +115,64 @@ public class OrdersController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Item added to order successfully." });
+    }
+
+    [HttpPost("{id}/checkout")]
+    public async Task<ActionResult<CheckoutResponseDto>> CheckoutOrder(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .ThenInclude(i => i.Product)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order is null)
+        {
+            return NotFound(new { message = $"Order with id {id} was not found." });
+        }
+
+        if (order.Status != "Pending")
+        {
+            return BadRequest(new { message = "Only pending orders can be checked out." });
+        }
+
+        if (!order.Items.Any())
+        {
+            return BadRequest(new { message = "Cannot checkout an order with no items." });
+        }
+
+        foreach (var item in order.Items)
+        {
+            if (item.Product is null)
+            {
+                return BadRequest(new { message = $"Product data is missing for order item {item.Id}." });
+            }
+
+            if (item.Quantity > item.Product.StockQuantity)
+            {
+                return BadRequest(new
+                {
+                    message = $"Not enough stock for product '{item.Product.Name}'. Available stock: {item.Product.StockQuantity}."
+                });
+            }
+        }
+
+        foreach (var item in order.Items)
+        {
+            item.Product!.StockQuantity -= item.Quantity;
+        }
+
+        order.Status = "Paid";
+
+        await _context.SaveChangesAsync();
+
+        var response = new CheckoutResponseDto
+        {
+            OrderId = order.Id,
+            Status = order.Status,
+            TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitPrice),
+            Message = "Order checked out successfully."
+        };
+
+        return Ok(response);
     }
 }
